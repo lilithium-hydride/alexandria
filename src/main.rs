@@ -6,6 +6,8 @@ use std::{
 	io,
 	path::PathBuf,
 };
+use std::path::Path;
+use std::str::FromStr;
 use cursive::{
 	Cursive,
 	traits::*,
@@ -29,6 +31,7 @@ use cursive::{
 		LinearLayout,
 	},
 };
+use cursive::view::Margins;
 use cursive_tree_view::{
 	Placement,
 	TreeView,
@@ -37,6 +40,7 @@ use cursive_tabs::{
 	Align, 
 	TabPanel}
 ;
+//use cursive_markup::*;
 
 
 #[derive(Debug)]
@@ -58,22 +62,27 @@ fn collect_entries(dir: &PathBuf, entries: &mut Vec<TreeEntry>) -> io::Result<()
 			let entry = entry?;
 			let path = entry.path();
 
-			if path.is_dir() {
-				entries.push(TreeEntry {
-					name: entry
-						.file_name()
-						.into_string()
-						.unwrap_or_else(|_| "".to_string()),
-					dir: Some(path),
-				});
-			} else if path.is_file() {
-				entries.push(TreeEntry {
-					name: entry
-						.file_name()
-						.into_string()
-						.unwrap_or_else(|_| "".to_string()),
-					dir: None,
-				});
+			// There's probably a much faster way of ignoring dotfiles.
+			// In fact, there's probably a much faster way of building this tree.
+			// This works for the time being, leaving it in until it becomes problematic.
+			if !path.file_name().unwrap().to_str().unwrap().starts_with(".") {
+				if path.is_dir() {
+						entries.push(TreeEntry {
+							name: entry
+								.file_name()
+								.into_string()
+								.unwrap_or_else(|_| "".to_string()),
+							dir: Some(path),
+						});
+				} else if path.is_file() {
+					entries.push(TreeEntry {
+						name: entry
+							.file_name()
+							.into_string()
+							.unwrap_or_else(|_| "".to_string()),
+						dir: None,
+					});
+				}
 			}
 		}
 	}
@@ -99,21 +108,53 @@ fn expand_tree(tree: &mut TreeView<TreeEntry>, parent_row: usize, dir: &PathBuf)
 	}
 }
 
+fn theme(siv: &Cursive) -> Theme {
+	let mut theme = siv.current_theme().clone();
+	
+	/*theme.palette[PaletteColor::Background] = Color::TerminalDefault;
+	theme.palette[PaletteColor::View] = Color::TerminalDefault;
+	theme.palette[PaletteColor::Shadow] = Color::TerminalDefault;
+	theme.palette[PaletteColor::TitlePrimary] = Color::TerminalDefault;
+	theme.palette[PaletteColor::TitleSecondary] = Color::TerminalDefault;
+	theme.palette[PaletteColor::Primary] = Color::TerminalDefault;
+	theme.palette[PaletteColor::Secondary] = Color::TerminalDefault;
+	theme.palette[PaletteColor::Tertiary] = Color::TerminalDefault;
+	theme.palette[PaletteColor::Highlight] = Color::from_256colors(6);
+	theme.palette[PaletteColor::HighlightInactive] = Color::from_256colors(4);
+	theme.palette[PaletteColor::HighlightText] = Color::from_256colors(0);*/
+	theme.shadow = false;
+	theme.borders = BorderStyle::None;
+	
+	theme
+}
 
 fn main() {
-	let mut file_tree= TreeView::<TreeEntry>::new();
-	let path = env::current_dir().expect("No working directory");
+	let args: Vec<_> = env::args().collect();
 	
+	let mut siv = cursive::default();
+
+	let theme = theme(&siv);
+	siv.set_theme(theme);
+	
+	
+	let cwd: PathBuf = env::current_dir().expect("No working directory");
+	let library_dir: PathBuf = PathBuf::from_str(args.get(1).unwrap_or(&cwd.to_str().unwrap().to_string())).unwrap_or(cwd);
+
+	
+	// File tree setup
+
+	let mut file_tree= TreeView::<TreeEntry>::new();
+
 	file_tree.insert_item(
 		TreeEntry {
-			name: path.file_name().unwrap().to_str().unwrap().to_string(),
-			dir: Some(path.clone()),
+			name: library_dir.file_name().unwrap().to_str().unwrap().to_string(),
+			dir: Some(library_dir.clone()),
 		},
 		Placement::After,
 		0,
 	);
 	
-	expand_tree(&mut file_tree, 0, &path);
+	expand_tree(&mut file_tree, 0, &library_dir);
 
 	file_tree.set_on_collapse(|siv: &mut Cursive, row, is_collapsed, children| {
 		if !is_collapsed && children == 0 {
@@ -125,20 +166,42 @@ fn main() {
 		}
 	});
 	
-	let mut siv = cursive::default();
-	// siv.add_layer(Dialog::around(file_tree.with_name("tree").scrollable()).title("File View"));
+	
+	// Editor setup
+	
+	let mut editor = TextArea::new().with_name("Editor");
+	
+	
+	// Set up main Cursive layer
+	
+	let sidebar_width: usize = 25;
 	siv.add_layer(
 		Dialog::around(
 			LinearLayout::horizontal()
 				.child(TabPanel::new()
-					.with_tab(TextView::new("Placeholder:\nGlobal Search").fixed_width(30).with_name(""))
-					.with_tab_at(file_tree.with_name("tree").scrollable().fixed_width(30).with_name("פּ"), 0)
+					// Tabs are placed in the order declared below, unless `with_tab_at()` is used.
+					// The last tab created gets focused, so the "main" tab will be declared last,
+					// but at the first (0th) position in the tab series.
+					.with_tab(
+						TextView::new("Placeholder:\nGlobal Search").fixed_width(sidebar_width).with_name("")
+					)
+					.with_tab(
+						TextView::new("Placeholder:\nStarred Files").fixed_width(sidebar_width).with_name("")
+					)
+					.with_tab_at(
+						file_tree.with_name("tree").scrollable().fixed_width(sidebar_width).with_name("פּ"), 
+						0
+					)
 					.with_bar_alignment(Align::Start)
 				)
-				.child(TextArea::new().with_name("Title").scrollable().full_width().full_height())
+				.child(
+					editor.scrollable().full_width().full_height()
+				)
 				.full_width()
 				.full_height(),
-		).button("Quit", |s| s.quit())
+		)
+			.padding(Margins::zeroes())
+			.button("Quit", |s| s.quit())
 	);
 	
 	siv.run();
