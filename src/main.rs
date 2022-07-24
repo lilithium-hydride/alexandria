@@ -4,10 +4,9 @@ use std::{
 	fmt,
 	fs,
 	io,
+	str::FromStr,
 	path::PathBuf,
 };
-use std::path::Path;
-use std::str::FromStr;
 use cursive::{
 	Cursive,
 	traits::*,
@@ -21,6 +20,7 @@ use cursive::{
 	},
 	view::{
 		Nameable,
+		Margins,
 	},
 	views::{
 		Dialog,
@@ -31,7 +31,6 @@ use cursive::{
 		LinearLayout,
 	},
 };
-use cursive::view::Margins;
 use cursive_tree_view::{
 	Placement,
 	TreeView,
@@ -169,14 +168,13 @@ fn main() {
 	
 	// Editor setup
 	
-	let mut editor = TextArea::new().with_name("Editor");
+	let mut editor = TextArea::new().with_name("editor");
 	
 	
 	// Set up main Cursive layer
 	
 	let sidebar_width: usize = 25;
-	siv.add_layer(
-		Dialog::around(
+	siv.add_fullscreen_layer(
 			LinearLayout::horizontal()
 				.child(TabPanel::new()
 					// Tabs are placed in the order declared below, unless `with_tab_at()` is used.
@@ -199,9 +197,6 @@ fn main() {
 				)
 				.full_width()
 				.full_height(),
-		)
-			.padding(Margins::zeroes())
-			.button("Quit", |s| s.quit())
 	);
 	
 	siv.run();
