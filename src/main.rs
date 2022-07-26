@@ -31,6 +31,7 @@ use cursive::{
 		LinearLayout,
 	},
 };
+use cursive::views::{DummyView, NamedView, ResizedView, ScrollView};
 use cursive_tree_view::{
 	Placement,
 	TreeView,
@@ -139,7 +140,12 @@ fn main() {
 	let cwd: PathBuf = env::current_dir().expect("No working directory");
 	let library_dir: PathBuf = PathBuf::from_str(args.get(1).unwrap_or(&cwd.to_str().unwrap().to_string())).unwrap_or(cwd);
 
-	
+
+	// Editor setup
+
+	let mut editor = TextArea::new().full_height().scrollable().with_name("editor");
+
+
 	// File tree setup
 
 	let mut file_tree= TreeView::<TreeEntry>::new();
@@ -165,10 +171,14 @@ fn main() {
 		}
 	});
 	
-	
-	// Editor setup
-	
-	let mut editor = TextArea::new().with_name("editor");
+	file_tree.set_on_submit(|siv: &mut Cursive, row: usize| {
+		let tree_handle = siv.find_name::<TreeView<TreeEntry>>("tree").unwrap();
+		let content = tree_handle.borrow_item(row).unwrap().name.clone();
+		
+		siv.call_on_name("editor", |e: &mut TextArea| {
+			e.set_content(content);
+		});
+	});
 	
 	
 	// Set up main Cursive layer
@@ -176,24 +186,32 @@ fn main() {
 	let sidebar_width: usize = 25;
 	siv.add_fullscreen_layer(
 			LinearLayout::horizontal()
-				.child(TabPanel::new()
-					// Tabs are placed in the order declared below, unless `with_tab_at()` is used.
-					// The last tab created gets focused, so the "main" tab will be declared last,
-					// but at the first (0th) position in the tab series.
-					.with_tab(
-						TextView::new("Placeholder:\nGlobal Search").fixed_width(sidebar_width).with_name("")
+				.child(LinearLayout::vertical()
+					.child(DummyView.fixed_height(1))
+					.child(TabPanel::new()
+						// Tabs are placed in the order declared below, unless `with_tab_at()` is used.
+						// The last tab created gets focused, so the "main" tab will be declared last,
+						// but at the first (0th) position in the tab series.
+						.with_tab(
+							TextView::new("Placeholder:\nGlobal Search").fixed_width(sidebar_width).full_height().with_name("")
+						)
+						.with_tab(
+							TextView::new("Placeholder:\nStarred Files").fixed_width(sidebar_width).full_height().with_name("")
+						)
+						.with_tab_at(
+							file_tree.with_name("tree").scrollable().fixed_width(sidebar_width).full_height().with_name("פּ"),
+							0
+						)
+						.with_bar_alignment(Align::Start)
 					)
-					.with_tab(
-						TextView::new("Placeholder:\nStarred Files").fixed_width(sidebar_width).with_name("")
-					)
-					.with_tab_at(
-						file_tree.with_name("tree").scrollable().fixed_width(sidebar_width).with_name("פּ"), 
-						0
-					)
-					.with_bar_alignment(Align::Start)
 				)
+				.child(DummyView.fixed_width(1))
 				.child(
-					editor.scrollable().full_width().full_height()
+					LinearLayout::vertical()
+						.child(TextView::new(StyledString::styled("File name", Effect::Bold)).full_width().max_height(1))
+						.child(DummyView.fixed_height(1))
+						.child(editor)
+						.child(DummyView.fixed_height(1))
 				)
 				.full_width()
 				.full_height(),
