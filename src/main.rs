@@ -21,6 +21,8 @@ use cursive::{
 	view::{
 		Nameable,
 		Margins,
+		Selector,
+		ViewWrapper,
 	},
 	views::{
 		Dialog,
@@ -29,9 +31,12 @@ use cursive::{
 		OnEventView,
 		TextArea,
 		LinearLayout,
+		DummyView,
+		NamedView,
+		ResizedView,
+		ScrollView,
 	},
 };
-use cursive::views::{DummyView, NamedView, ResizedView, ScrollView};
 use cursive_tree_view::{
 	Placement,
 	TreeView,
@@ -43,10 +48,18 @@ use cursive_tabs::{
 //use cursive_markup::*;
 
 
+#[derive(Debug, PartialEq)]
+enum NodeType {
+	File,
+	Folder
+}
+
+
 #[derive(Debug)]
 struct TreeEntry {
 	name: String,
 	dir: Option<PathBuf>,
+	node_type: NodeType,
 }
 
 impl fmt::Display for TreeEntry {
@@ -73,6 +86,7 @@ fn collect_entries(dir: &PathBuf, entries: &mut Vec<TreeEntry>) -> io::Result<()
 								.into_string()
 								.unwrap_or_else(|_| "".to_string()),
 							dir: Some(path),
+							node_type: NodeType::Folder,
 						});
 				} else if path.is_file() {
 					entries.push(TreeEntry {
@@ -80,7 +94,8 @@ fn collect_entries(dir: &PathBuf, entries: &mut Vec<TreeEntry>) -> io::Result<()
 							.file_name()
 							.into_string()
 							.unwrap_or_else(|_| "".to_string()),
-						dir: None,
+						dir: Some(path),
+						node_type: NodeType::File,
 					});
 				}
 			}
@@ -93,14 +108,14 @@ fn expand_tree(tree: &mut TreeView<TreeEntry>, parent_row: usize, dir: &PathBuf)
 	let mut entries = Vec::new();
 	collect_entries(dir, &mut entries).ok();
 
-	entries.sort_by(|a, b| match (a.dir.is_some(), b.dir.is_some()) {
+	entries.sort_by(|a, b| match (a.node_type == NodeType::Folder, b.node_type == NodeType::Folder) {
 		(true, true) | (false, false) => a.name.cmp(&b.name),
 		(true, false) => Ordering::Less,
 		(false, true) => Ordering::Greater,
 	});
 
 	for i in entries {
-		if i.dir.is_some() {
+		if i.node_type == NodeType::Folder {
 			tree.insert_container_item(i, Placement::LastChild, parent_row);
 		} else {
 			tree.insert_item(i, Placement::LastChild, parent_row);
@@ -141,24 +156,25 @@ fn main() {
 	let library_dir: PathBuf = PathBuf::from_str(args.get(1).unwrap_or(&cwd.to_str().unwrap().to_string())).unwrap_or(cwd);
 
 
-	// Editor setup
+	// Editor setup //
 
-	let mut editor = TextArea::new().full_height().scrollable().with_name("editor");
+	let mut editor = TextArea::new();
 
-
-	// File tree setup
+	
+	// File tree setup //
 
 	let mut file_tree= TreeView::<TreeEntry>::new();
 
+	// Insert root directory
 	file_tree.insert_item(
 		TreeEntry {
 			name: library_dir.file_name().unwrap().to_str().unwrap().to_string(),
 			dir: Some(library_dir.clone()),
+			node_type: NodeType::Folder
 		},
 		Placement::After,
 		0,
 	);
-	
 	expand_tree(&mut file_tree, 0, &library_dir);
 
 	file_tree.set_on_collapse(|siv: &mut Cursive, row, is_collapsed, children| {
@@ -173,15 +189,18 @@ fn main() {
 	
 	file_tree.set_on_submit(|siv: &mut Cursive, row: usize| {
 		let tree_handle = siv.find_name::<TreeView<TreeEntry>>("tree").unwrap();
-		let content = tree_handle.borrow_item(row).unwrap().name.clone();
+		let name = tree_handle.borrow_item(row).unwrap().name.clone();
+		let dir = tree_handle.borrow_item(row).unwrap().dir.clone().unwrap();
+		let dir_string = dir.to_string_lossy();
+		let contents = fs::read_to_string(dir).expect("oopsy occurred while reading file");
 		
-		siv.call_on_name("editor", |e: &mut TextArea| {
-			e.set_content(content);
-		});
+		siv.call_on_name("editor", |editor_view: &mut NamedView<TextArea>| {
+			editor_view.with_view_mut(|e| e.set_content(contents));
+		}).expect("failed to call on editor");
 	});
 	
 	
-	// Set up main Cursive layer
+	// Set up main Cursive layer //
 	
 	let sidebar_width: usize = 25;
 	siv.add_fullscreen_layer(
@@ -210,7 +229,7 @@ fn main() {
 					LinearLayout::vertical()
 						.child(TextView::new(StyledString::styled("File name", Effect::Bold)).full_width().max_height(1))
 						.child(DummyView.fixed_height(1))
-						.child(editor)
+						.child(editor.with_name("editor").full_height().scrollable())
 						.child(DummyView.fixed_height(1))
 				)
 				.full_width()
