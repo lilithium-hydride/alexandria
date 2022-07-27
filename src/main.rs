@@ -197,6 +197,9 @@ fn main() {
 		siv.call_on_name("editor", |editor_view: &mut NamedView<TextArea>| {
 			editor_view.with_view_mut(|e| e.set_content(contents));
 		}).expect("failed to call on editor");
+		siv.call_on_name("doc_name", |editor_filename_display: &mut TextView| {
+			editor_filename_display.set_content(StyledString::styled(name, Effect::Underline));
+		}).expect("failed to call on doc_name");
 	});
 	
 	
@@ -227,8 +230,7 @@ fn main() {
 				.child(DummyView.fixed_width(1))
 				.child(
 					LinearLayout::vertical()
-						.child(TextView::new(StyledString::styled("File name", Effect::Bold)).full_width().max_height(1))
-						.child(DummyView.fixed_height(1))
+						.child(TextView::new(' ').with_name("doc_name").full_width().max_height(1))
 						.child(editor.with_name("editor").full_height().scrollable())
 						.child(DummyView.fixed_height(1))
 				)
