@@ -19,6 +19,7 @@ version = "0.1.0"
 dependencies = [
  "cursive",
  "cursive-tabs",
+ "cursive_buffered_backend",
  "cursive_tree_view",
 ]
 
@@ -147,6 +148,20 @@ dependencies = [
  "cursive_core",
  "log",
  "num",
+]
+
+[[package]]
+name = "cursive_buffered_backend"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68c7725a87b0a5240427917d645d279669fa8bb523cd920d2c442da7ef8b769d"
+dependencies = [
+ "cursive_core",
+ "enumset",
+ "log",
+ "smallvec",
+ "unicode-segmentation",
+ "unicode-width",
 ]
 
 [[package]]
@@ -518,6 +533,12 @@ checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "smallvec"
+version = "1.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fd0db749597d91ff862fd1d55ea87f7855a744a8425a64695b6fca237d1dad1"
 
 [[package]]
 name = "stable_deref_trait"

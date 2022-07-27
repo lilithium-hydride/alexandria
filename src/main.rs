@@ -145,6 +145,12 @@ fn theme(siv: &Cursive) -> Theme {
 
 fn main() {
 	let args: Vec<_> = env::args().collect();
+
+	let backend_init = || -> std::io::Result<Box<dyn cursive::backend::Backend>> {
+		let backend = cursive::backends::termion::Backend::init()?;
+		let buffered_backend = cursive_buffered_backend::BufferedBackend::new(backend);
+		Ok(Box::new(buffered_backend))
+	};
 	
 	let mut siv = cursive::default();
 
@@ -238,6 +244,6 @@ fn main() {
 				.full_height(),
 	);
 	
-	siv.run();
+	siv.try_run_with(backend_init).ok();
 	
 }
