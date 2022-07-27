@@ -129,10 +129,10 @@ fn theme(siv: &Cursive) -> Theme {
 	/*theme.palette[PaletteColor::Background] = Color::TerminalDefault;
 	theme.palette[PaletteColor::View] = Color::TerminalDefault;
 	theme.palette[PaletteColor::Shadow] = Color::TerminalDefault;
-	theme.palette[PaletteColor::TitlePrimary] = Color::TerminalDefault;
+	theme.palette[PaletteColor::TitlePrimary] = Color::from_256colors(6);
 	theme.palette[PaletteColor::TitleSecondary] = Color::TerminalDefault;
 	theme.palette[PaletteColor::Primary] = Color::TerminalDefault;
-	theme.palette[PaletteColor::Secondary] = Color::TerminalDefault;
+	theme.palette[PaletteColor::Secondary] = Color::from_256colors(0);
 	theme.palette[PaletteColor::Tertiary] = Color::TerminalDefault;
 	theme.palette[PaletteColor::Highlight] = Color::from_256colors(6);
 	theme.palette[PaletteColor::HighlightInactive] = Color::from_256colors(4);
