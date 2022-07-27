@@ -1,0 +1,1 @@
+This is a directory for testing Alexandria's I/O with both strange and non-strage data. Not that you need to worry about your files being accidentally erased, of course.
