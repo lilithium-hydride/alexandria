@@ -80,14 +80,14 @@ fn collect_entries(dir: &PathBuf, entries: &mut Vec<TreeEntry>) -> io::Result<()
 			// This works for the time being, leaving it in until it becomes problematic.
 			if !path.file_name().unwrap().to_str().unwrap().starts_with('.') {
 				if path.is_dir() {
-						entries.push(TreeEntry {
-							name: entry
-								.file_name()
-								.into_string()
-								.unwrap_or_else(|_| "".to_string()),
-							dir: Some(path),
-							node_type: NodeType::Folder,
-						});
+					entries.push(TreeEntry {
+						name: entry
+							.file_name()
+							.into_string()
+							.unwrap_or_else(|_| "".to_string()),
+						dir: Some(path),
+						node_type: NodeType::Folder,
+					});
 				} else if path.is_file() {
 					entries.push(TreeEntry {
 						name: entry
