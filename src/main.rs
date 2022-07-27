@@ -78,7 +78,7 @@ fn collect_entries(dir: &PathBuf, entries: &mut Vec<TreeEntry>) -> io::Result<()
 			// There's probably a much faster way of ignoring dotfiles.
 			// In fact, there's probably a much faster way of building this tree.
 			// This works for the time being, leaving it in until it becomes problematic.
-			if !path.file_name().unwrap().to_str().unwrap().starts_with(".") {
+			if !path.file_name().unwrap().to_str().unwrap().starts_with('.') {
 				if path.is_dir() {
 						entries.push(TreeEntry {
 							name: entry
