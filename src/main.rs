@@ -1,12 +1,6 @@
-use std::{
-	cmp::Ordering,
-	env,
-	fmt,
-	fs,
-	io,
-	str::FromStr,
-	path::PathBuf,
-};
+use std::{cmp::Ordering, env, fmt, fs, io, str::FromStr, path::PathBuf, sync, time::Duration, thread};
+use std::sync::mpsc;
+use notify::{RecommendedWatcher, Watcher, RecursiveMode, watcher, DebouncedEvent};
 use cursive::{
 	Cursive,
 	traits::*,
@@ -145,7 +139,8 @@ fn theme(siv: &Cursive) -> Theme {
 
 fn main() {
 	let args: Vec<_> = env::args().collect();
-
+	
+	// Set up double-buffered Termion backend
 	let backend_init = || -> std::io::Result<Box<dyn cursive::backend::Backend>> {
 		let backend = cursive::backends::termion::Backend::init()?;
 		let buffered_backend = cursive_buffered_backend::BufferedBackend::new(backend);
@@ -156,9 +151,27 @@ fn main() {
 
 	let theme = theme(&siv);
 	siv.set_theme(theme);
+
+
+	let (watchthread_tx, watchthread_rx): (mpsc::Sender<PathBuf>, mpsc::Receiver<PathBuf>) = mpsc::channel();
+	let (fwatch_tx, fwatch_rx) = mpsc::channel();
+	let mut watcher = watcher(fwatch_tx, Duration::from_secs(1)).unwrap();
+	thread::spawn(move || {
+		let mut old_dir = PathBuf::from("");
+		loop {
+			if let Ok(dir) = watchthread_rx.recv_timeout(Duration::from_secs(1)) {
+				if old_dir != dir {
+					watcher.unwatch(old_dir).unwrap();
+					watcher.watch(&dir, RecursiveMode::Recursive).unwrap();
+				}
+				old_dir = dir;
+			}
+		}
+	});
 	
 	
-	let cwd: PathBuf = env::current_dir().expect("No working directory");
+	// TODO: don't crash if no working dir, just move onto arg. if no arg, *then* crash.
+	let cwd: PathBuf = env::current_dir().expect("No working directory.");
 	let library_dir: PathBuf = PathBuf::from_str(args.get(1).unwrap_or(&cwd.to_str().unwrap().to_string())).unwrap_or(cwd);
 
 
@@ -166,6 +179,15 @@ fn main() {
 
 	let mut editor = TextArea::new();
 
+	// Ctrl-S to save file
+	siv.add_global_callback(Event::CtrlChar('s'), |siv: &mut Cursive| {
+		let tree_handle = siv.find_name::<TreeView<TreeEntry>>("tree").unwrap();
+		let dir = tree_handle.borrow_item(tree_handle.row().unwrap()).unwrap().dir.clone().unwrap();
+		let editor_handle = siv.find_name::<TextArea>("editor").unwrap();
+		let contents = editor_handle.get_content();
+		fs::write(dir, contents).expect("oopsy while writing file");
+	});
+	
 	
 	// File tree setup //
 
@@ -193,19 +215,51 @@ fn main() {
 		}
 	});
 	
-	file_tree.set_on_submit(|siv: &mut Cursive, row: usize| {
+	file_tree.set_on_submit(move |siv: &mut Cursive, row: usize| {
 		let tree_handle = siv.find_name::<TreeView<TreeEntry>>("tree").unwrap();
 		let name = tree_handle.borrow_item(row).unwrap().name.clone();
 		let dir = tree_handle.borrow_item(row).unwrap().dir.clone().unwrap();
 		let dir_string = dir.to_string_lossy();
-		let contents = fs::read_to_string(dir).expect("oopsy occurred while reading file");
+		let mut contents = fs::read_to_string(&dir).expect("oopsy while reading file");
 		
 		siv.call_on_name("editor", |editor_view: &mut NamedView<TextArea>| {
+			contents.pop(); // Cursive seems to insert an extra line break on every file.
 			editor_view.with_view_mut(|e| e.set_content(contents));
 		}).expect("failed to call on editor");
 		siv.call_on_name("doc_name", |editor_filename_display: &mut TextView| {
 			editor_filename_display.set_content(StyledString::styled(name, Effect::Underline));
 		}).expect("failed to call on doc_name");
+		
+		watchthread_tx.send(dir).expect("Failed to send dir to watchthread. Is it down?");
+	});
+	
+	thread::spawn(move || {
+		loop {
+			match fwatch_rx.recv() {
+				Ok(event) => {
+					match event {
+						DebouncedEvent::Write(dir) => {
+							siv.call_on_name("editor", | editor_view: &mut NamedView<TextArea> | {
+								let mut contents = fs::read_to_string(&dir).expect("oopsy while reading file");
+								contents.pop(); // Cursive seems to insert an extra line break on every file.
+								editor_view.with_view_mut(|e| e.set_content(contents));
+							});
+						}
+						DebouncedEvent::Rescan => {
+							// TODO: get dir elsewhere since it isn't in the event
+						}
+						DebouncedEvent::Rename(_, _) => {
+							// TODO: update directory tree
+						}
+						DebouncedEvent::Create(_) => {
+							// TODO: update directory tree
+						}
+						_ => {}
+					}
+				},
+				Err(e) => eprintln!("watch error: {:?}", e),
+			}
+		}
 	});
 	
 	
